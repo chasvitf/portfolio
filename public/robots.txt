@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://chanavee.vercel.app/sitemap.xml
