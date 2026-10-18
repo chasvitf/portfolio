@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>เคสแก้บั๊กจริง · Chanavee Pimprong</title>
+  <meta name="description" content="บันทึกการหาสาเหตุและแก้บั๊กจริงจากโปรเจกต์ที่เปิดซอร์สโค้ด: ESP32, Google Sheets, MQTT, AI ตรวจจับวัตถุ และ Apps Script พร้อมโค้ดก่อน/หลังและลิงก์ commit">
+  <meta name="author" content="Chanavee Pimprong">
+  <link rel="canonical" href="https://chanavee.vercel.app/bugfixes.html">
+  <meta name="theme-color" content="#0f172a">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="เคสแก้บั๊กจริง · Chanavee Pimprong">
+  <meta property="og:description" content="อาการ สาเหตุ วิธีแก้ และวิธีพิสูจน์ว่าหายจริง จากโปรเจกต์ที่เปิดโค้ด">
+  <meta property="og:url" content="https://chanavee.vercel.app/bugfixes.html">
+  <meta property="og:image" content="https://chanavee.vercel.app/og-bugfixes.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/cases.css">
+</head>
+<body>
+  <header class="hero small">
+    <nav class="top">
+      <a class="mark" href="/">CP</a>
+      <div class="links">
+        <a href="/#work">ผลงาน</a>
+        <a href="/#services">บริการ</a>
+        <a href="https://github.com/chasvitf" target="_blank" rel="noopener">GitHub</a>
+      </div>
+    </nav>
+    <div class="intro">
+      <p class="kicker">ตัวอย่างงานแก้บั๊ก</p>
+      <h1>เคสแก้บั๊กจริง</h1>
+      <p class="lead">บั๊กที่เจอระหว่างทำโปรเจกต์ที่เปิดซอร์สโค้ด แต่ละเคสเขียนเหมือนรายงานที่ส่งให้ลูกค้า: อาการ สาเหตุ วิธีแก้ และวิธีพิสูจน์ว่าหายจริง</p>
+      <div class="cta">
+        <a class="btn primary" href="https://fastwork.co/user/chasvitf/it-solution-and-support-92012618" target="_blank" rel="noopener">จ้างแก้บั๊กผ่าน Fastwork</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="cases">
+    <article class="case" id="millis">
+      <div class="case-head">
+        <span class="num">01</span>
+        <div>
+          <h2>ปั๊มน้ำหยุดทำงานถาวร เมื่อบอร์ดเปิดต่อเนื่องครบ 49 วัน</h2>
+          <ul class="chips"><li>ESP32</li><li>C++</li><li>Unit test</li></ul>
+        </div>
+      </div>
+      <dl>
+        <dt>อาการ</dt><dd>เทสต์ที่จำลองเวลาของบอร์ดใกล้ค่าสูงสุดของ <code>millis()</code> พบว่าปั๊มไม่ยอมเปิด แม้ดินแห้ง ถ้าเกิดกับบอร์ดจริงคือรดน้ำไม่ได้เลยหลังเปิดเครื่องประมาณ 49.7 วัน</dd>
+        <dt>สาเหตุ</dt><dd><code>millis()</code> เป็นตัวเลข 32 บิตที่วนกลับเป็น 0 ทุก 49.7 วัน โค้ดเดิมเทียบ "เวลาที่จะพักปั๊มเสร็จ" แบบตัวเลขตรง ๆ ค่าเริ่มต้น 0 จึงดูเหมือนยังพักอยู่ตลอด</dd>
+        <dt>วิธีแก้</dt><dd>วัด "เวลาที่ผ่านไปตั้งแต่เริ่ม" (<code>now - start</code>) ซึ่งคำนวณถูกเสมอแม้ตัวเลขวนรอบ และเก็บสถานะพักปั๊มเป็นตัวแปรแยก</dd>
+      </dl>
+      <div class="diff">
+        <pre class="before"><span>ก่อน</span>bool resting = int32_t(now - restUntil_) &lt; 0;
+...
+restUntil_ = now + kPumpRestMs;</pre>
+        <pre class="after"><span>หลัง</span>if (resting_ &amp;&amp; now - restStart_ &gt;= kPumpRestMs)
+  resting_ = false;
+...
+resting_ = true;
+restStart_ = now;</pre>
+      </div>
+      <p class="proof"><b>พิสูจน์:</b> เพิ่มเทสต์ <code>millisWrap</code> ที่เริ่มนับเวลาก่อนตัวเลขวนรอบ 5 วินาที รันบนคอมพิวเตอร์ด้วย <code>make test</code> ไม่ผ่านกับโค้ดเดิม และผ่านหลังแก้ · <a href="https://github.com/chasvitf/smartfarm-iot/blob/main/test/control_test.cpp" target="_blank" rel="noopener">ดูเทสต์</a> · <a href="https://github.com/chasvitf/smartfarm-iot/blob/main/firmware/smartfarm/control.h" target="_blank" rel="noopener">ดูโค้ด</a></p>
+    </article>
+
+    <article class="case" id="sumifs">
+      <div class="case-head">
+        <span class="num">02</span>
+        <div>
+          <h2>กราฟยอดขายรายวันมีแค่วันแรก ที่เหลือว่าง</h2>
+          <ul class="chips"><li>Google Sheets</li><li>สูตร</li></ul>
+        </div>
+      </div>
+      <dl>
+        <dt>อาการ</dt><dd>ชีตรายงานรายวัน 30 วันมีตัวเลขแค่แถวแรก กราฟยอดขายจึงมีแท่งเดียว และตาราง "ขายดี 30 วัน" ของสินค้าว่างทั้งคอลัมน์</dd>
+        <dt>สาเหตุ</dt><dd><code>SUMIFS</code> และ <code>COUNTIFS</code> ไม่กระจายผลลัพธ์เมื่ออยู่ใน <code>ARRAYFORMULA</code> ต่างจาก <code>SUMIF</code> ที่กระจายได้ จึงคำนวณแค่ค่าแรก</dd>
+        <dt>วิธีแก้</dt><dd>ใช้ <code>MAP</code> + <code>LAMBDA</code> ให้คำนวณทีละแถว สูตรยังเป็นสูตรเดียวต่อคอลัมน์ ไม่ต้องลากสูตร</dd>
+      </dl>
+      <div class="diff">
+        <pre class="before"><span>ก่อน</span>=ARRAYFORMULA(SUMIFS(รายการ!G2:G,
+  รายการ!B2:B, "ขาย", รายการ!L2:L, A2:A31))</pre>
+        <pre class="after"><span>หลัง</span>=MAP(A2:A31, LAMBDA(d,
+  SUMIFS(รายการ!G2:G, รายการ!B2:B, "ขาย", รายการ!L2:L, d)))</pre>
+      </div>
+      <p class="proof"><b>พิสูจน์:</b> รันสคริปต์สร้างชีตใหม่ทั้งไฟล์ แล้วตรวจกราฟ 30 วันและตารางสินค้าขายดีในชีตจริง · <a href="https://github.com/chasvitf/stocksheet/blob/main/src/Setup.js" target="_blank" rel="noopener">ดูโค้ด</a></p>
+    </article>
+
+    <article class="case" id="freshness">
+      <div class="case-head">
+        <span class="num">03</span>
+        <div>
+          <h2>แดชบอร์ดบอก "อัปเดต 8 วินาทีที่แล้ว" กับข้อมูลที่เก่าเป็นชั่วโมง</h2>
+          <ul class="chips"><li>MQTT</li><li>JavaScript</li><li>IoT dashboard</li></ul>
+        </div>
+      </div>
+      <dl>
+        <dt>อาการ</dt><dd>บอร์ดออฟไลน์ไปแล้วหลายชั่วโมง แต่เปิดเว็บแล้วขึ้นว่าเพิ่งอัปเดต ผู้ใช้อาจเข้าใจผิดว่าค่าบนจอเป็นค่าปัจจุบัน</dd>
+        <dt>สาเหตุ</dt><dd>ข้อมูลล่าสุดถูกเก็บไว้ที่ broker แบบ retained และถูกส่งมาทันทีที่เว็บเชื่อมต่อ โค้ดเดิมใช้ "เวลาที่ข้อความมาถึงเบราว์เซอร์" จึงดูสดเสมอ</dd>
+        <dt>วิธีแก้</dt><dd>ใช้เวลาที่บอร์ดวัดจริง (บอร์ดซิงก์เวลาจาก NTP และแนบมากับข้อมูล) ทั้งในการตัดสินว่าออนไลน์และข้อความ "อัปเดตเมื่อ" และทำปุ่มควบคุมให้จางลงเมื่อบอร์ดออฟไลน์</dd>
+      </dl>
+      <div class="diff">
+        <pre class="before"><span>ก่อน</span>return state.status === "online" &amp;&amp;
+  Date.now() - state.lastAt &lt; STALE_MS;</pre>
+        <pre class="after"><span>หลัง</span>const dataTime = () =&gt; state.last?.ts
+  ? state.last.ts * 1000 : state.lastAt;
+return state.status === "online" &amp;&amp;
+  Date.now() - dataTime() &lt; STALE_MS;</pre>
+      </div>
+      <p class="proof"><b>พิสูจน์:</b> จำลองบอร์ดส่งข้อมูลจริงผ่าน broker 45 วินาที แดชบอร์ดขึ้น "ออนไลน์" พอหยุดส่งก็กลับเป็น "ออฟไลน์" ถูกต้อง แล้วล้างข้อความทดสอบออกจาก broker · <a href="https://github.com/chasvitf/smartfarm-iot/commit/611a0b1e5c130114dc46eff760ea1ccf4deaf8f6" target="_blank" rel="noopener">ดู commit</a></p>
+    </article>
+
+    <article class="case" id="riders">
+      <div class="case-head">
+        <span class="num">04</span>
+        <div>
+          <h2>AI นับคนขี่มอเตอร์ไซค์ซ้ำเป็น "คนเดินถนน"</h2>
+          <ul class="chips"><li>Computer vision</li><li>Object tracking</li><li>JavaScript</li></ul>
+        </div>
+      </div>
+      <dl>
+        <dt>อาการ</dt><dd>คลิปสี่แยกมีมอเตอร์ไซค์ผ่านเส้นนับ แต่ยอด "คน" เพิ่มขึ้นด้วย โดยเฉพาะบนเครื่องที่ไม่มีการ์ดจอซึ่งวิเคราะห์ได้แค่ 7 เฟรมต่อวินาที</dd>
+        <dt>สาเหตุ</dt><dd>โค้ดเดิมตัดคนขี่ออกทีละเฟรมโดยดูว่ากรอบคนซ้อนกับกรอบรถสองล้อไหม ในเฟรมที่โมเดลมองไม่เห็นตัวรถ คนขี่จึงหลุดมาเป็นคนเดิน และถูกติดตามจนข้ามเส้น</dd>
+        <dt>วิธีแก้</dt><dd>ให้ตัวติดตาม (tracker) จำว่าเป้าหมายนี้ "เคยเป็นคนขี่" ข้ามเฟรม และบนเครื่องที่ใช้ CPU ให้เล่นวิดีโอช้าลงครึ่งหนึ่งเพื่อให้ได้เฟรมพอสำหรับติดตาม</dd>
+      </dl>
+      <div class="diff">
+        <pre class="before"><span>ก่อน</span>return dets.filter((d) =&gt; d.cls !== "person" ||
+  !bikes.some((b) =&gt; overlap(d, b) &gt; 0.25));</pre>
+        <pre class="after"><span>หลัง</span>d.rider = bikes.some((b) =&gt; overlap(d, b) &gt; 0.25);
+...
+t.rider ||= !!d.rider;   // จำข้ามเฟรม
+return this.tracks.filter((t) =&gt; !t.rider);</pre>
+      </div>
+      <p class="proof"><b>พิสูจน์:</b> เทียบกับการนับด้วยตาทีละครึ่งวินาที คลิปมีรถข้ามเส้นจริงประมาณ 11 คัน บนการ์ดจอนับได้ 10 คัน และไม่มีคนขี่ถูกนับเป็นคนเดิน · <a href="https://github.com/chasvitf/countcam/commit/3f6777a200b4124b6d22f37196154b1e08637cf2" target="_blank" rel="noopener">ดู commit</a></p>
+    </article>
+
+    <article class="case" id="broker">
+      <div class="case-head">
+        <span class="num">05</span>
+        <div>
+          <h2>เว็บต่อ MQTT broker ไม่ติด 2 ใน 3 ครั้ง</h2>
+          <ul class="chips"><li>MQTT over WebSocket</li><li>TLS</li><li>วัดผล</li></ul>
+        </div>
+      </div>
+      <dl>
+        <dt>อาการ</dt><dd>บางครั้งเปิดแดชบอร์ดแล้วค้างที่ "กำลังเชื่อมต่อ…" ใน log ของเบราว์เซอร์มี <code>connack timeout</code></dd>
+        <dt>สาเหตุ</dt><dd>เขียนสคริปต์ทดสอบเชื่อมต่อ broker สาธารณะ 3 เจ้า เจ้าละ 3 รอบ เจ้าเดิมตอบไม่ทัน 2 ใน 3 รอบ ส่วนอีก 2 เจ้าตอบทุกครั้งภายในประมาณ 1 วินาที ปัญหาจึงอยู่ที่ broker ไม่ใช่โค้ดฝั่งเว็บ</dd>
+        <dt>วิธีแก้</dt><dd>ย้ายไป broker ที่ผ่านการวัด เปลี่ยนใบรับรอง root CA บนบอร์ด ESP32 ให้ตรงกับ broker ใหม่ แล้วตรวจ chain ด้วย <code>openssl</code> ก่อนใช้ (ไม่ปิดการตรวจใบรับรอง)</dd>
+      </dl>
+      <p class="proof"><b>พิสูจน์:</b> รันบอร์ดจริงบนตัวจำลอง Wokwi เชื่อมต่อ TLS สำเร็จ และแดชบอร์ดเห็นข้อมูลทุก 5 วินาที · <a href="https://github.com/chasvitf/smartfarm-iot/blob/main/firmware/smartfarm/certs.h" target="_blank" rel="noopener">ดูโค้ด</a></p>
+    </article>
+
+    <article class="case" id="logs">
+      <div class="case-head">
+        <span class="num">06</span>
+        <div>
+          <h2>Log ของ Apps Script ขึ้น "ล้มเหลว" ทั้งที่ระบบทำงานถูก</h2>
+          <ul class="chips"><li>Google Apps Script</li><li>Error handling</li></ul>
+        </div>
+      </div>
+      <dl>
+        <dt>อาการ</dt><dd>เมื่อพนักงานกรอกขายเกินสต็อก ฟอร์มเตือนถูกต้อง แต่หน้าประวัติการทำงานของสคริปต์บันทึกว่า "ล้มเหลว" คนดูแลระบบจะแยกไม่ออกว่าอันไหนเป็นปัญหาจริง</dd>
+        <dt>สาเหตุ</dt><dd>ใช้ <code>throw</code> กับกรณีปกติที่คาดไว้แล้ว (สต็อกไม่พอ, กรอกเวลาผิด)</dd>
+        <dt>วิธีแก้</dt><dd>คืนผลลัพธ์ <code>{ ok: false, error }</code> ให้ฟอร์มแสดงข้อความ และเก็บ <code>throw</code> ไว้สำหรับความผิดพลาดที่ไม่คาดคิดเท่านั้น</dd>
+      </dl>
+      <p class="proof"><b>พิสูจน์:</b> ลองขายสินค้าที่สต็อกเป็น 0 ในชีตจริง ฟอร์มเตือนเหมือนเดิม และ log บันทึกว่า "เสร็จสมบูรณ์" · <a href="https://github.com/chasvitf/stocksheet/commit/45d9fff41fff6760a213e84386b9cd442ceff8ec" target="_blank" rel="noopener">ดู commit</a></p>
+    </article>
+  </main>
+
+  <footer>
+    <p><a href="/">← กลับหน้าผลงาน</a> · Chanavee Pimprong · <a href="https://fastwork.co/user/chasvitf" target="_blank" rel="noopener">fastwork.co/user/chasvitf</a></p>
+  </footer>
+</body>
+</html>
